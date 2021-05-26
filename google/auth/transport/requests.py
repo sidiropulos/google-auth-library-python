@@ -44,6 +44,7 @@ import six  # pylint: disable=ungrouped-imports
 from google.auth import environment_vars
 from google.auth import exceptions
 from google.auth import transport
+import google.auth.transport.mtls
 import google.auth.transport._mtls_helper
 from google.oauth2 import service_account
 
@@ -235,6 +236,53 @@ class _MutualTlsAdapter(requests.adapters.HTTPAdapter):
         return super(_MutualTlsAdapter, self).proxy_manager_for(*args, **kwargs)
 
 
+class _HsmTlsAdapter(requests.adapters.HTTPAdapter):
+    """
+    A TransportAdapter that enables mutual TLS for HSM.
+
+    Args:
+        cert (bytes): client certificate in PEM format
+        key (dict): dictionary containing private key information in HSM
+
+    Raises:
+        ImportError: if certifi or pyOpenSSL is not installed
+        OpenSSL.crypto.Error: if client cert or key is invalid
+    """
+
+    def __init__(self, cert, key):
+        import certifi
+        from OpenSSL import crypto
+        import urllib3.contrib.pyopenssl
+        from OpenSSL._util import lib as _lib
+
+        urllib3.contrib.pyopenssl.inject_into_urllib3()
+
+        pkey = google.auth.transport.mtls.load_private_pkcs11_key(key)
+        x509 = crypto.load_certificate(crypto.FILETYPE_PEM, cert)
+
+        ctx_poolmanager = create_urllib3_context()
+        ctx_poolmanager.load_verify_locations(cafile=certifi.where())
+        ctx_poolmanager._ctx.use_certificate(x509)
+        _lib.SSL_CTX_use_PrivateKey(ctx_poolmanager._ctx._context, pkey)
+        self._ctx_poolmanager = ctx_poolmanager
+
+        ctx_proxymanager = create_urllib3_context()
+        ctx_proxymanager.load_verify_locations(cafile=certifi.where())
+        ctx_proxymanager._ctx.use_certificate(x509)
+        _lib.SSL_CTX_use_PrivateKey(ctx_proxymanager._ctx._context, pkey)
+        self._ctx_proxymanager = ctx_proxymanager
+
+        super(_HsmTlsAdapter, self).__init__()
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["ssl_context"] = self._ctx_poolmanager
+        super(_HsmTlsAdapter, self).init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, *args, **kwargs):
+        kwargs["ssl_context"] = self._ctx_proxymanager
+        return super(_HsmTlsAdapter, self).proxy_manager_for(*args, **kwargs)
+
+
 class AuthorizedSession(requests.Session):
     """A Requests Session class with credentials.
 
@@ -410,7 +458,10 @@ class AuthorizedSession(requests.Session):
             )
 
             if self._is_mtls:
-                mtls_adapter = _MutualTlsAdapter(cert, key)
+                if isinstance(key, bytes):
+                    mtls_adapter = _MutualTlsAdapter(cert, key)
+                else:
+                    mtls_adapter = _HsmTlsAdapter(cert, key)
                 self.mount("https://", mtls_adapter)
         except (
             exceptions.ClientCertError,
