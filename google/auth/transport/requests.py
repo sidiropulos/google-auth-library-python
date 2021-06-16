@@ -458,7 +458,7 @@ class AuthorizedSession(requests.Session):
             )
 
             if self._is_mtls:
-                if isinstance(key, bytes):
+                if not key.decode().startswith("engine:"):
                     mtls_adapter = _MutualTlsAdapter(cert, key)
                 else:
                     mtls_adapter = _HsmTlsAdapter(cert, key)

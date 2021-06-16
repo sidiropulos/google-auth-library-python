@@ -105,27 +105,28 @@ def default_client_encrypted_cert_source(cert_path, key_path):
     return callback
 
 
-def load_private_pkcs11_key(key_info):
+def load_private_pkcs11_key(key):
     from OpenSSL._util import (
         ffi as _ffi,
         lib as _lib,
     )
 
     null = _ffi.NULL
-    engine_id = key_info["engine_id"]
-    pin = key_info["pin"]
-    key_id = key_info["key_id"]
-    so_path = key_info["so_path"]
-    module_path = key_info["module_path"]
+
+    # key is supposed to have b"engine:<engine_id>:<key_id>:<PIN>" format.
+    parts = key.decode().split(":")
+    if parts[0] != "engine" or len(parts) !=4:
+        raise exceptions.MutualTLSChannelError("invalid key format")
+    engine_id = parts[1]
+    key_id = parts[2]
+    pin = parts[3]
 
     _lib.ENGINE_load_builtin_engines()
     e = _lib.ENGINE_by_id(engine_id)
     if not e:
         raise exceptions.MutualTLSChannelError("failed to load engine: " + engine_id)
 
-    _lib.ENGINE_ctrl_cmd_string(e, b"SO_PATH", so_path, 0)
     _lib.ENGINE_ctrl_cmd_string(e, b"LOAD", null, 0)
-    _lib.ENGINE_ctrl_cmd_string(e, b"MODULE_PATH", module_path, 0)
     _lib.ENGINE_ctrl_cmd_string(e, b"PIN", pin, 0)
     if not _lib.ENGINE_init(e):
         raise exceptions.MutualTLSChannelError("failed to init engine: " + engine_id)
