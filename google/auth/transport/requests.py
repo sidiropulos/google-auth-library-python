@@ -179,7 +179,6 @@ class Request(transport.Request):
             google.auth.exceptions.TransportError: If any exception occurred.
         """
         try:
-            _LOGGER.debug("Making request: %s %s", method, url)
             response = self.session.request(
                 method, url, data=body, headers=headers, timeout=timeout, **kwargs
             )
@@ -494,14 +493,6 @@ class AuthorizedSession(requests.Session):
             response.status_code in self._refresh_status_codes
             and _credential_refresh_attempt < self._max_refresh_attempts
         ):
-
-            _LOGGER.info(
-                "Refreshing credentials due to a %s response. Attempt %s/%s.",
-                response.status_code,
-                _credential_refresh_attempt + 1,
-                self._max_refresh_attempts,
-            )
-
             # Do not apply the timeout unconditionally in order to not override the
             # _auth_request's default timeout.
             auth_request = (

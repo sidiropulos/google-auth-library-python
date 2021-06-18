@@ -60,7 +60,6 @@ def _check_dca_metadata_path(metadata_path):
     """
     metadata_path = path.expanduser(metadata_path)
     if not path.exists(metadata_path):
-        _LOGGER.debug("%s is not found, skip client SSL authentication.", metadata_path)
         return None
     return metadata_path
 

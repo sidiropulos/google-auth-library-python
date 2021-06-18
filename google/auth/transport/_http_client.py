@@ -101,8 +101,6 @@ class Request(transport.Request):
         connection = http_client.HTTPConnection(parts.netloc, timeout=timeout)
 
         try:
-            _LOGGER.debug("Making request: %s %s", method, url)
-
             connection.request(method, path, body=body, headers=headers, **kwargs)
             response = connection.getresponse()
             return Response(response)

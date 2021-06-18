@@ -183,7 +183,6 @@ class Request(transport.Request):
                 self.session = aiohttp.ClientSession(
                     auto_decompress=False
                 )  # pragma: NO COVER
-            requests._LOGGER.debug("Making request: %s %s", method, url)
             response = await self.session.request(
                 method, url, data=body, headers=headers, timeout=timeout, **kwargs
             )
@@ -348,14 +347,6 @@ class AuthorizedSession(aiohttp.ClientSession):
                 response.status in self._refresh_status_codes
                 and _credential_refresh_attempt < self._max_refresh_attempts
             ):
-
-                requests._LOGGER.info(
-                    "Refreshing credentials due to a %s response. Attempt %s/%s.",
-                    response.status,
-                    _credential_refresh_attempt + 1,
-                    self._max_refresh_attempts,
-                )
-
                 # Do not apply the timeout unconditionally in order to not override the
                 # _auth_request's default timeout.
                 auth_request = (
